@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  sentiment_service:
+    build: ./Sentiment
+    ports:
+      - "8001:8001"
+    #volumes:
+    #  - ./Sentiment:/app
+  
+  ner_service:
+    build: ./NER
+    ports:
+      - "8002:8002"
+    #volumes:
+    #  - ./NER:/app
+  
+  proxy_service:
+    build: ./Proxy
+    ports:
+      - "8003:8003"
+    depends_on:
+      - sentiment_service
+      - ner_service
+    #volumes:
+    #  - ./Proxy:/app
+

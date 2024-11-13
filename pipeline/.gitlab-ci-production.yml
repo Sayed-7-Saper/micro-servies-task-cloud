@@ -1,0 +1,38 @@
+variables:
+    ENV: "prod"
+    ECR_PROJECT: "tttt-prod"
+    
+.deploy-common-service:
+  trigger:
+    include: pipeline/service-deploy/.gitlab-ci-template.yml
+    strategy: depend
+  variables:
+    TEST_MODE: "No"
+
+trigger_ner:
+  extends: .deploy-common-service
+  rules:
+    - changes:
+        -  ner/**/*
+  variables:
+    SERVICE: "ner" 
+    POD_PORT: "8002"
+
+
+trigger_proxy:
+  extends: .deploy-common-service
+  rules:
+    - changes:
+        - proxy/**/*
+  variables:
+    SERVICE: "proxy" 
+    POD_PORT: "8003"
+
+trigger_sentiment:
+  extends: .deploy-service
+  rules:
+    - changes:
+        - sentiment/**/*
+  variables:
+    SERVICE: "sentiment" 
+    POD_PORT: "8001"

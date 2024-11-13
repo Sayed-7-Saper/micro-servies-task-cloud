@@ -1,0 +1,60 @@
+stages:
+  - build
+  - deploy
+
+image: registry-az1.kashier.io/base-images/docker:24.0.5
+
+services:
+  #- docker:19.03.12-dind 
+  - registry-az1.kashier.io/base-images/docker:24.0.5
+
+
+Building_Service:       # This job runs in the build stage, which runs first.
+  stage: build
+  cache: 
+    key: $CI_COMMIT_REF_SLUG-$CI_PROJECT_DIR
+    paths:
+      - node_modules/ 
+  before_script:
+      - echo $HRBR_REGISTRY_PASSWORD | docker login  $HRBR_REGISTRY  -u $HRBR_REGISTRY_USER --password-stdin
+
+  script:
+    - echo "Building Service."
+    - cd $SERVICE/ 
+    - docker build --build-arg POD_PORT=$POD_PORT --build-arg NODE_ENV=$ENV --cache-from $HRBR_REGISTRY/$HARBOR_PROJECT/$SERVICE:$ENV-latest -t $HRBR_REGISTRY/$HARBOR_PROJECT/$SERVICE:$ENV-$CI_COMMIT_SHORT_SHA -t $HRBR_REGISTRY/$HARBOR_PROJECT/$SERVICE:$ENV-latest .
+    - docker push $HRBR_REGISTRY/$HARBOR_PROJECT/$SERVICE:$ENV-$CI_COMMIT_SHORT_SHA
+    - docker push $HRBR_REGISTRY/$HARBOR_PROJECT/$SERVICE:$ENV-latest
+
+  retry: 2
+
+
+Deploying_Service:
+  variables:
+    imagetag: $ENV-$CI_COMMIT_SHORT_SHA
+  stage: deploy
+  #needs: ["build-merchant-service"]
+  image: registry-az1.kashier.io/base-images/microservice-deploy:v1.0.1
+  script:
+  - git clone https://REPO_USERNAME:$REPO_PASSWORD@$PROJECT_URL
+  - cd platform-manifests
+  - git config --global user.email "$SERVICE@pipline"
+  - git config --global user.name "$SERVICE"
+  - git checkout $CI_COMMIT_BRANCH
+  - git pull
+  - ls -al 
+  # - sed -i "/^\([[:space:]]*tag:\s\).*/s//\1"$CI_COMMIT_SHORT_SHA"/" $SERVICE/values.yaml
+  - yq -i ".[env(SERVICE)].image.tag |= \"$ENV-$CI_COMMIT_SHORT_SHA\"" kashier/values-$CI_COMMIT_BRANCH.yaml
+  - echo "$SERVICE updated "
+  - |- 
+          if [[ $TEST_MODE == "Yes" ]]; then
+              export SERVICE=test-$SERVICE
+              yq -i ".[env(SERVICE)].image.tag |= \"$ENV-$CI_COMMIT_SHORT_SHA\"" kashier/values-$CI_COMMIT_BRANCH.yaml
+              echo "$SERVICE updated "
+          else 
+              echo "Common $SERVICE updated "
+          fi
+  
+  - git add .
+  - git commit -m "edit tag value for $SERVICE $CI_COMMIT_BRANCH image $ENV-$CI_COMMIT_SHORT_SHA"
+  - git push origin $CI_COMMIT_BRANCH
+  retry: 2
